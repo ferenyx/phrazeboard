@@ -1,0 +1,238 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden
+        }
+
+        .flex-wrapper {
+            display: flex;
+            flex-flow: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-div {
+            max-width: 100vw;
+            max-height: 95vh;
+            height: auto;
+            flex: 1 1 auto;
+        }
+
+        #jump-div {
+            flex: 0 0 auto;
+        }
+    </style>
+    <script>
+        var translatePos = {
+            x: 0,
+            y: 0,
+        };
+        var showBoard = true;
+        // squares are 132x132
+        // margin is 30
+        const puzzleDim = 6000;
+        const margin = 22;
+        const boxDim = (puzzleDim - margin * 2) / 45;
+
+        function draw() {
+            var canvas = document.getElementById("myCanvas");
+            var context = canvas.getContext("2d");
+            var img = document.getElementById("boardImg");
+
+            // clear canvas
+            const imgX = -translatePos.x;
+            const imgY = -translatePos.y;
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, imgX, imgY, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+            context.font = "16px console"
+
+
+            // draw vertical lines
+            const startXn = Math.floor((imgX - margin) / boxDim);
+            const startX = startXn * boxDim + margin;
+            const startXOff = startX - imgX;
+
+            for (var xCoord = startXOff; xCoord <= canvas.width; xCoord += boxDim) {
+                context.beginPath();
+                context.moveTo(xCoord, 0);
+                context.lineTo(xCoord, canvas.height);
+                context.strokeStyle = "#ff0000";
+                context.stroke();
+            }
+
+            // draw horizontal lines
+            const startYn = Math.floor((imgY - margin) / boxDim);
+            const startY = startYn * boxDim + margin;
+            const startYOff = startY - imgY;
+            for (var yCoord = startYOff; yCoord <= canvas.height; yCoord += boxDim) {
+                context.beginPath();
+                context.moveTo(0, yCoord);
+                context.lineTo(canvas.width, yCoord);
+                context.strokeStyle = "#ff0000";
+                context.stroke();
+                for (var xCoord = startXOff; xCoord <= canvas.width; xCoord += boxDim) {
+                    const absX = xCoord + imgX;
+                    const absY = yCoord + imgY;
+                    const xVal = Math.round((absX - margin) / boxDim) + 1;
+                    const yVal = Math.round((absY - margin) / boxDim) + 1;
+
+                    if (xVal > 45 || yVal > 45) continue;
+                    context.strokeText("(" + xVal + ", " + yVal + ")", xCoord + 2, yCoord + 16);
+                }
+            }
+        }
+
+        function respondCanvas() {
+            var canvas = document.getElementById("myCanvas");
+            var container = canvas.parentElement;
+
+            const dim = Math.min(container.clientWidth, container.clientHeight);
+            canvas.width = dim;
+            canvas.height = dim;
+
+            draw();
+        }
+        window.onresize = respondCanvas;
+
+        function clipTranslatePos() {
+            var canvas = document.getElementById("myCanvas");
+            var img = document.getElementById("boardImg");
+
+            if (translatePos.x > 0) translatePos.x = 0;
+            if (translatePos.x < -(img.width - canvas.width)) translatePos.x = -(img.width - canvas.width);
+            if (translatePos.y > 0) translatePos.y = 0;
+            if (translatePos.y < -(img.height - canvas.height)) translatePos.y = -(img.height - canvas.height);
+        }
+
+        window.onload = function () {
+            var input = document.querySelectorAll('input');
+            for (i = 0; i < input.length; i++) {
+                input[i].setAttribute('size', input[i].getAttribute('placeholder').length);
+            }
+
+            var canvas = document.getElementById("myCanvas");
+            var img = document.getElementById("boardImg");
+
+            var startDragOffset = {};
+            var mouseDown = false;
+            var mouseDrag = false;
+
+            // add event listeners to handle screen drag
+            canvas.addEventListener("mousedown", function (evt) {
+                mouseDown = true;
+                mouseDrag = false;
+                startDragOffset.x = evt.clientX - translatePos.x;
+                startDragOffset.y = evt.clientY - translatePos.y;
+            });
+
+            canvas.addEventListener("mouseup", function (evt) {
+                mouseDown = false;
+                if (!mouseDrag) {
+                    // this was a click
+                    showBoard = !showBoard;
+                    draw();
+                }
+            });
+
+            canvas.addEventListener("mouseover", function (evt) {
+                mouseDown = false;
+                mouseDrag = false;
+            });
+
+            canvas.addEventListener("mouseout", function (evt) {
+                mouseDown = false;
+                mouseDrag = false;
+            });
+
+            canvas.addEventListener("mousemove", function (evt) {
+                if (mouseDown) {
+                    translatePos.x = evt.clientX - startDragOffset.x;
+                    translatePos.y = evt.clientY - startDragOffset.y;
+
+                    clipTranslatePos();
+
+                    draw();
+                    mouseDrag = true;
+                }
+            });
+
+            respondCanvas();
+        };
+
+        function showCoords(cX, cY) {
+            // modifies translatePos.x and translatePos.y and then redraws so the box cX, cY
+            // is visible.
+            var canvas = document.getElementById("myCanvas");
+            var img = document.getElementById("boardImg");
+
+            var boxX = cX * boxDim + margin - canvas.width / 2;
+            var boxY = cY * boxDim + margin - canvas.height / 2;
+
+            translatePos.x = -boxX;
+            translatePos.y = -boxY;
+
+            clipTranslatePos();
+            draw();
+        }
+
+        function parseColStr(colStr) {
+            // Converts base 26 letters into numbers - i.e. A = 1, Z = 26, AA = 27, AB = 28, ...
+            colStr = colStr.toUpperCase();
+
+            var col = 0;
+            for (var i = 0; i < colStr.length; i++) {
+                col *= 26;
+                col += colStr.charCodeAt(i) - 65 + 1;
+            }
+            return col;
+        }
+
+        function jump_to() {
+            const form = document.getElementById("jump-form");
+
+            var coordx = Number(form.elements["coordx"].value)
+            if (isNaN(coordx)) {
+                coordx = parseColStr(form.elements["coordx"].value)
+                form.elements["coordx"].value = coordx;
+            }
+            const coordy = Number(form.elements["coordy"].value)
+
+            if (coordx < 1 || coordx > 45 || coordy < 1 || coordy > 45) {
+                alert("Coordinates must be between 1 and 45: " + coordx + ", " + coordy + " provided.");
+                return false;
+            }
+
+            showCoords(coordx, coordy);
+
+            return false;
+        }
+    </script>
+</head>
+
+<body>
+    <div class="flex-wrapper">
+        <div id="canvas-div">
+            <canvas id="myCanvas"></canvas>
+        </div>
+        <div id="jump-div">
+            <form id="jump-form" onsubmit="return jump_to()">
+                <input type="text" name="coordx" placeholder="column (e.g. AA or 27)" pattern="[A-Za-z]*|[0-9]*"
+                    required />x<input type="number" name="coordy" placeholder="row (e.g. 23)" required />
+                <button type="submit" name="jump-button">Jump</button>
+            </form>
+        </div>
+    </div>
+    <img src="https://phrazeboard.xyz/blue.png" id="boardImg" style="display: none">
+</body>
+
+</html>
