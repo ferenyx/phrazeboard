@@ -3,6 +3,9 @@
 
 <head>
     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"
+        integrity="sha512-SGWgwwRA8xZgEoKiex3UubkSkV1zSE1BS6O4pXcaxcNtUlQsOmOmhVnDwIvqGRfEmuz83tIGL13cXMZn6upPyg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <style>
@@ -22,13 +25,29 @@
 
         #canvas-div {
             max-width: 100vw;
-            max-height: 95vh;
+            max-height: 90vh;
             height: auto;
             flex: 1 1 auto;
         }
 
         #jump-div {
             flex: 0 0 auto;
+        }
+
+        #search-div {
+            flex: 0 0 auto;
+        }
+
+        #search-word {
+            min-width: 300px;
+        }
+
+        #search-results-div {
+            flex: 0 0 auto;
+        }
+
+        #search-results-select {
+            min-width: 300px;
         }
     </style>
     <script>
@@ -37,11 +56,14 @@
             y: 0,
         };
         var showBoard = true;
+
         // squares are 132x132
         // margin is 30
         const puzzleDim = 6000;
         const margin = 22;
         const boxDim = (puzzleDim - margin * 2) / 45;
+
+        var boardWords = null;
 
         function draw() {
             var canvas = document.getElementById("myCanvas");
@@ -53,9 +75,10 @@
             const imgY = -translatePos.y;
 
             context.clearRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(img, imgX, imgY, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
-            context.font = "16px console"
 
+            if (showBoard) {
+                context.drawImage(img, imgX, imgY, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+            }
 
             // draw vertical lines
             const startXn = Math.floor((imgX - margin) / boxDim);
@@ -86,8 +109,23 @@
                     const xVal = Math.round((absX - margin) / boxDim) + 1;
                     const yVal = Math.round((absY - margin) / boxDim) + 1;
 
-                    if (xVal > 45 || yVal > 45) continue;
+                    if (xVal <= 0 || yVal <= 0 || xVal > 45 || yVal > 45) continue;
+
+                    context.strokeStyle = "#ff0000";
+                    context.font = "16px console";
                     context.strokeText("(" + xVal + ", " + yVal + ")", xCoord + 2, yCoord + 16);
+
+                    if (!showBoard) {
+                        context.strokeStyle = "#000000";
+                        context.font = "28px console";
+                        var display = boardWords[yVal - 1][xVal - 1];
+                        display = display.replace("/", "\n");
+                        display = display.replace(",", "\n");
+                        var lines = display.split("\n");
+                        for (var i = 0; i < lines.length; i++) {
+                            context.strokeText(lines[i], xCoord + 5, yCoord + 50 + i * 35);
+                        }
+                    }
                 }
             }
         }
@@ -115,58 +153,72 @@
         }
 
         window.onload = function () {
-            var input = document.querySelectorAll('input');
-            for (i = 0; i < input.length; i++) {
-                input[i].setAttribute('size', input[i].getAttribute('placeholder').length);
-            }
+            const boardURL = new URL("./board.csv", document.baseURI).href
+            Papa.parse(boardURL, {
+                download: true,
+                complete: function (results) {
+                    boardWords = results.data;
 
-            var canvas = document.getElementById("myCanvas");
-            var img = document.getElementById("boardImg");
+                    for (var i = 0; i < 45; i++) {
+                        for (var j = 0; j < 45; j++) {
+                            boardWords[i][j] = boardWords[i][j].toLowerCase();
+                        }
+                    }
+                    console.log(boardWords);
+                    var input = document.querySelectorAll('input');
+                    for (i = 0; i < input.length; i++) {
+                        input[i].setAttribute('size', input[i].getAttribute('placeholder').length);
+                    }
 
-            var startDragOffset = {};
-            var mouseDown = false;
-            var mouseDrag = false;
+                    var canvas = document.getElementById("myCanvas");
+                    var img = document.getElementById("boardImg");
 
-            // add event listeners to handle screen drag
-            canvas.addEventListener("mousedown", function (evt) {
-                mouseDown = true;
-                mouseDrag = false;
-                startDragOffset.x = evt.clientX - translatePos.x;
-                startDragOffset.y = evt.clientY - translatePos.y;
-            });
+                    var startDragOffset = {};
+                    var mouseDown = false;
+                    var mouseDrag = false;
 
-            canvas.addEventListener("mouseup", function (evt) {
-                mouseDown = false;
-                if (!mouseDrag) {
-                    // this was a click
-                    showBoard = !showBoard;
-                    draw();
+                    // add event listeners to handle screen drag
+                    canvas.addEventListener("mousedown", function (evt) {
+                        mouseDown = true;
+                        mouseDrag = false;
+                        startDragOffset.x = evt.clientX - translatePos.x;
+                        startDragOffset.y = evt.clientY - translatePos.y;
+                    });
+
+                    canvas.addEventListener("mouseup", function (evt) {
+                        mouseDown = false;
+                        if (!mouseDrag) {
+                            // this was a click
+                            showBoard = !showBoard;
+                            draw();
+                        }
+                    });
+
+                    canvas.addEventListener("mouseover", function (evt) {
+                        mouseDown = false;
+                        mouseDrag = false;
+                    });
+
+                    canvas.addEventListener("mouseout", function (evt) {
+                        mouseDown = false;
+                        mouseDrag = false;
+                    });
+
+                    canvas.addEventListener("mousemove", function (evt) {
+                        if (mouseDown) {
+                            translatePos.x = evt.clientX - startDragOffset.x;
+                            translatePos.y = evt.clientY - startDragOffset.y;
+
+                            clipTranslatePos();
+
+                            draw();
+                            mouseDrag = true;
+                        }
+                    });
+
+                    respondCanvas();
                 }
             });
-
-            canvas.addEventListener("mouseover", function (evt) {
-                mouseDown = false;
-                mouseDrag = false;
-            });
-
-            canvas.addEventListener("mouseout", function (evt) {
-                mouseDown = false;
-                mouseDrag = false;
-            });
-
-            canvas.addEventListener("mousemove", function (evt) {
-                if (mouseDown) {
-                    translatePos.x = evt.clientX - startDragOffset.x;
-                    translatePos.y = evt.clientY - startDragOffset.y;
-
-                    clipTranslatePos();
-
-                    draw();
-                    mouseDrag = true;
-                }
-            });
-
-            respondCanvas();
         };
 
         function showCoords(cX, cY) {
@@ -198,14 +250,14 @@
         }
 
         function jump_to() {
-            const form = document.getElementById("jump-form");
+            const jumpForm = document.getElementById("jump-form");
 
-            var coordx = Number(form.elements["coordx"].value)
+            var coordx = Number(jumpForm.elements["coordx"].value)
             if (isNaN(coordx)) {
-                coordx = parseColStr(form.elements["coordx"].value)
-                form.elements["coordx"].value = coordx;
+                coordx = parseColStr(jumpForm.elements["coordx"].value)
+                jumpForm.elements["coordx"].value = coordx;
             }
-            const coordy = Number(form.elements["coordy"].value)
+            const coordy = Number(jumpForm.elements["coordy"].value)
 
             if (coordx < 1 || coordx > 45 || coordy < 1 || coordy > 45) {
                 alert("Coordinates must be between 1 and 45: " + coordx + ", " + coordy + " provided.");
@@ -215,6 +267,54 @@
             showCoords(coordx, coordy);
 
             return false;
+        }
+
+        function search() {
+            const searchForm = document.getElementById("search-form");
+            var searchText = searchForm.elements["search-word"].value;
+
+            const resultsForm = document.getElementById("search-results");
+            var resultsSelector = resultsForm.elements["search-results-select"];
+            for (var i = resultsSelector.options.length - 1; i >= 0; i--) {
+                resultsSelector.remove(i);
+            }
+
+            if (searchText == "") {
+                resultsSelector.options[resultsSelector.options.length] = new Option("--Please enter a word to find above--", "--Please enter a word to find above--");
+                return;
+            }
+
+            searchText = searchText.toLowerCase();
+
+            for (var i = 0; i < 45; i++) {
+                for (var j = 0; j < 45; j++) {
+                    if (boardWords[i][j].includes(searchText)) {
+                        var optionStr = boardWords[i][j] + " (" + (j + 1) + ", " + (i + 1) + ")";
+                        var optionVal = boardWords[i][j] + " " + (i + 1) + " " + (j + 1);
+                        resultsSelector.options[resultsSelector.options.length] = new Option(optionStr, optionVal);
+                    }
+                }
+            }
+        }
+
+        function selectSearchResult(event) {
+            var selector = document.getElementById("search-results-select");
+            for (var option of selector.options) {
+                if (option.selected) {
+                    var val = option.value;
+                    const arr = val.split(" ");
+                    console.assert(arr.length >= 3, arr.length);
+
+                    const jumpForm = document.getElementById("jump-form");
+                    jumpForm.elements["coordx"].value = arr[arr.length - 1];
+                    jumpForm.elements["coordy"].value = arr[arr.length - 2];
+
+                    jump_to();
+
+                    // Ignore multiple selections - just process the first.
+                    return;
+                }
+            }
         }
     </script>
 </head>
@@ -229,6 +329,20 @@
                 <input type="text" name="coordx" placeholder="column (e.g. AA or 27)" pattern="[A-Za-z]*|[0-9]*"
                     required />x<input type="number" name="coordy" placeholder="row (e.g. 23)" required />
                 <button type="submit" name="jump-button">Jump</button>
+            </form>
+        </div>
+        <div id="search-div">
+            <form id="search-form" onsubmit="return false">
+                <input type="text" name="search-word" id="search-word" placeholder="word to find" required
+                    oninput="search()" />
+            </form>
+        </div>
+        <div id="search-results-div">
+            <form id="search-results" onsubmit="return false">
+                <select name="search-results-select" id="search-results-select" multiple
+                    onchange="selectSearchResult(event)">
+                    <option value="">--Please enter a word to find above--</option>
+                </select>
             </form>
         </div>
     </div>
